@@ -2,7 +2,9 @@ package com.challenge.listings_api.service;
 
 import com.challenge.listings_api.dto.ClusterDTO;
 import com.challenge.listings_api.dto.ListingDetailsDTO;
+import com.challenge.listings_api.dto.PagedResponse;
 import com.challenge.listings_api.entity.Listing;
+import com.challenge.listings_api.exception.ResourceNotFoundException;
 import com.challenge.listings_api.repository.ListingRepository;
 import com.challenge.listings_api.repository.ListingSpecifications;
 import com.challenge.listings_api.repository.ListingSummaryProjection;
@@ -20,41 +22,57 @@ import java.util.stream.Collectors;
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
+
 public class ListingService {
+
+
 
     private final ListingRepository repository;
 
-    public List<ListingSummaryProjection> searchListings(
+    public PagedResponse<ListingSummaryProjection> searchListings(
+            String cursor,
             Integer minRooms, Integer maxRooms, Double minPrice, Double maxPrice,
-            String type, Double minArea, Double maxArea, Integer minFloor, Integer maxFloor,
-            String tags, Double minLat, Double maxLat, Double minLon, Double maxLon,
+            String type, Double minArea, Double maxArea,
+            Integer minFloor, Integer maxFloor, String tags,
+            Double minLat, Double maxLat, Double minLon, Double maxLon,
             int limit) {
 
+        String effectiveCursor = (cursor != null) ? cursor : "";
+
+        List<ListingSummaryProjection> results;
+
         if (tags == null || tags.isBlank()) {
-            return repository.searchNative(
-                    minLat, maxLat, minLon, maxLon,
-                    minPrice, maxPrice, minRooms, maxRooms,
-                    minArea, maxArea, minFloor, maxFloor,
-                    type, limit);
+            results = repository.searchAfterCursor(
+                    effectiveCursor, minLat, maxLat, minLon, maxLon,
+                    minPrice, maxPrice, minRooms, maxRooms, type, limit);
+        } else {
+            var spec = ListingSpecifications.filterBy(
+                            minRooms, maxRooms, minPrice, maxPrice,
+                            type, minArea, maxArea, minFloor, maxFloor,
+                            tags, minLat, maxLat, minLon, maxLon)
+                    .and((root, q, cb) -> {
+                        Object cursorVal = effectiveCursor.isEmpty() ? 0L : Long.parseLong(effectiveCursor);
+                        return cb.greaterThan(root.get("id"), (Comparable) cursorVal);
+                    });
+
+            results = repository.findBy(spec, q -> q
+                    .as(ListingSummaryProjection.class)
+                    .sortBy(Sort.by("id").ascending())
+                    .limit(limit)
+                    .all());
         }
 
-        var spec = ListingSpecifications.filterBy(
-                minRooms, maxRooms, minPrice, maxPrice, type,
-                minArea, maxArea, minFloor, maxFloor, tags,
-                minLat, maxLat, minLon, maxLon);
+        String nextCursor = results.isEmpty() ? null
+                : results.get(results.size() - 1).getId();
+        boolean hasMore = results.size() == limit;
 
-        return repository.findBy(spec, q -> q
-                .as(ListingSummaryProjection.class)
-                .sortBy(Sort.by("id").ascending())
-                .limit(limit)
-                .all());
+        return new PagedResponse<>(results, nextCursor, hasMore);
     }
 
     @Cacheable(value = "listingDetails", key = "#id")
     public ListingDetailsDTO getById(String id) {
         Listing listing = repository.findById(id)
-                .orElseThrow(() -> new ResponseStatusException(
-                        HttpStatus.NOT_FOUND, "Listing with ID " + id + " not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("Listing with ID " + id + " not found"));
         return mapToDetails(listing);
     }
 

@@ -66,4 +66,30 @@ public interface ListingRepository extends JpaRepository<Listing, String>, JpaSp
             @Param("gridSize")    int gridSize,
             @Param("maxClusters") int maxClusters
     );
+
+    @Query(value = """
+    SELECT id, title, price, rooms, area_sqm, listing_type, lat, lon, floor, tags
+    FROM listings
+    WHERE id > :cursor
+      AND (:minLat   IS NULL OR lat         >= :minLat)
+      AND (:maxLat   IS NULL OR lat         <= :maxLat)
+      AND (:minLon   IS NULL OR lon         >= :minLon)
+      AND (:maxLon   IS NULL OR lon         <= :maxLon)
+      AND (:minPrice IS NULL OR price       >= :minPrice)
+      AND (:maxPrice IS NULL OR price       <= :maxPrice)
+      AND (:minRooms IS NULL OR rooms       >= :minRooms)
+      AND (:maxRooms IS NULL OR rooms       <= :maxRooms)
+      AND (:type     IS NULL OR listing_type = :type)
+    ORDER BY id ASC
+    LIMIT :lim
+    """, nativeQuery = true)
+    List<ListingSummaryProjection> searchAfterCursor(
+            @Param("cursor")   String cursor,
+            @Param("minLat")   Double minLat,   @Param("maxLat")   Double maxLat,
+            @Param("minLon")   Double minLon,   @Param("maxLon")   Double maxLon,
+            @Param("minPrice") Double minPrice, @Param("maxPrice") Double maxPrice,
+            @Param("minRooms") Integer minRooms,@Param("maxRooms") Integer maxRooms,
+            @Param("type")     String type,
+            @Param("lim")      int limit
+    );
 }
