@@ -78,8 +78,8 @@ public class ListingService {
 
     @Cacheable(
             value = "clusters",
-            key   = "T(java.util.Objects).hash(#minLat,#maxLat,#minLon,#maxLon," +
-                    "#minRooms,#maxRooms,#minPrice,#maxPrice,#type,#maxClusters)"
+            key = "T(java.util.Objects).hash(#minLat,#maxLat,#minLon,#maxLon,#minRooms,#maxRooms,#minPrice,#maxPrice,#type,#maxClusters," +
+                    "#minArea,#maxArea,#minFloor,#maxFloor,#tags)"
     )
     public List<ClusterDTO> getClusters(
             Integer minRooms, Integer maxRooms, Double minPrice, Double maxPrice,
@@ -101,6 +101,17 @@ public class ListingService {
                 .stream()
                 .map(p -> new ClusterDTO(p.getLat(), p.getLon(), p.getCount()))
                 .collect(Collectors.toList());
+    }
+
+    public void validateRanges(Double minPrice, Double maxPrice,
+                                Integer minRooms, Integer maxRooms,
+                                Double minArea, Double maxArea) {
+        if (minPrice != null && maxPrice != null && minPrice > maxPrice)
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "min_price cannot be greater than max_price");
+        if (minRooms != null && maxRooms != null && minRooms > maxRooms)
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "min_rooms cannot be greater than max_rooms");
+        if (minArea != null && maxArea != null && minArea > maxArea)
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "min_area cannot be greater than max_area");
     }
 
     private ListingDetailsDTO mapToDetails(Listing l) {

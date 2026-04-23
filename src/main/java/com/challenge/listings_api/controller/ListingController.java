@@ -8,6 +8,7 @@ import com.challenge.listings_api.service.ListingService;
 import jakarta.validation.constraints.*;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
@@ -22,13 +23,21 @@ public class ListingController {
 
     private final ListingService service;
 
+    /**
+     * Endpoint pentru monitorizare. Returnează 200 OK și un status JSON.
+     */
     @GetMapping("/health")
-    public Map<String, String> health() {
-        return Map.of("status", "ok");
+    public ResponseEntity<Map<String, String>> health() {
+        return ResponseEntity.ok(Map.of("status", "ok"));
     }
 
+    /**
+     * Endpoint paginat pentru listări.
+     * Body-ul este o listă simplă,
+     * iar metadatele de paginare sunt trimise în Headers.
+     */
     @GetMapping("/listings")
-    public PagedResponse<ListingSummaryProjection> getListings(
+    public ResponseEntity<List<ListingSummaryProjection>> getListings(
             @RequestParam(required = false) @PositiveOrZero Integer min_rooms,
             @RequestParam(required = false) @PositiveOrZero Integer max_rooms,
             @RequestParam(required = false) @PositiveOrZero Double min_price,
@@ -45,23 +54,36 @@ public class ListingController {
             @RequestParam(required = false) @DecimalMin("-180.0") @DecimalMax("180.0") Double max_lon,
             @RequestParam(required = false) String after,
             @RequestParam(defaultValue = "10") @Min(1) @Max(500) Integer limit) {
-        validateRanges(min_price, max_price, min_rooms, max_rooms, min_area, max_area);
 
-        return service.searchListings(after,
+        service.validateRanges(min_price, max_price, min_rooms, max_rooms, min_area, max_area);
+
+        PagedResponse<ListingSummaryProjection> pagedResponse = service.searchListings(after,
                 min_rooms, max_rooms, min_price, max_price,
                 listing_type, min_area, max_area, min_floor, max_floor,
                 tags, min_lat, max_lat, min_lon, max_lon,
                 limit
         );
+
+        return ResponseEntity.ok()
+                .header("X-Next-Cursor", pagedResponse.getNextCursor())
+                .header("X-Has-More", String.valueOf(pagedResponse.isHasMore()))
+                .body(pagedResponse.getData());
     }
 
+    /**
+     * Returnează detaliile complete ale unui anunț.
+     */
     @GetMapping("/listings/id/{id}")
-    public ListingDetailsDTO getListing(@PathVariable String id) {
-        return service.getById(id);
+    public ResponseEntity<ListingDetailsDTO> getListingById(@PathVariable String id) {
+        ListingDetailsDTO details = service.getById(id);
+        return ResponseEntity.ok(details);
     }
 
+    /**
+     * Returnează clusterele pentru vizualizarea pe hartă.
+     */
     @GetMapping("/listings/clusters")
-    public List<ClusterDTO> getClusters(
+    public ResponseEntity<List<ClusterDTO>> getClusters(
             @RequestParam @NotNull @DecimalMin("-90.0") @DecimalMax("90.0") Double min_lat,
             @RequestParam @NotNull @DecimalMin("-90.0") @DecimalMax("90.0") Double max_lat,
             @RequestParam @NotNull @DecimalMin("-180.0") @DecimalMax("180.0") Double min_lon,
@@ -76,26 +98,19 @@ public class ListingController {
             @RequestParam(required = false) Integer min_floor,
             @RequestParam(required = false) Integer max_floor,
             @RequestParam(required = false) String tags,
-            @RequestParam(defaultValue = "10") @Min(1) @Max(10) Integer max_clusters
+            @RequestParam(defaultValue = "50") @Min(1) @Max(500) Integer max_clusters
     ) {
-        validateRanges(min_price, max_price, min_rooms, max_rooms, min_area, max_area);
+        service.validateRanges(min_price, max_price, min_rooms, max_rooms, min_area, max_area);
+
         if (min_lat > max_lat || min_lon > max_lon) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid BBox coordinates");
         }
-        return service.getClusters(
+
+        List<ClusterDTO> clusters = service.getClusters(
                 min_rooms, max_rooms, min_price, max_price, listing_type,
                 min_area, max_area, min_floor, max_floor, tags,
                 min_lat, max_lat, min_lon, max_lon, max_clusters);
-    }
 
-    private void validateRanges(Double minPrice, Double maxPrice,
-                                Integer minRooms, Integer maxRooms,
-                                Double minArea, Double maxArea) {
-        if (minPrice != null && maxPrice != null && minPrice > maxPrice)
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "min_price cannot be greater than max_price");
-        if (minRooms != null && maxRooms != null && minRooms > maxRooms)
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "min_rooms cannot be greater than max_rooms");
-        if (minArea != null && maxArea != null && minArea > maxArea)
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "min_area cannot be greater than max_area");
+        return ResponseEntity.ok(clusters);
     }
 }
