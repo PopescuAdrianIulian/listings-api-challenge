@@ -4,12 +4,15 @@ import com.challenge.listings_api.dto.ClusterDTO;
 import com.challenge.listings_api.dto.ListingDetailsDTO;
 import com.challenge.listings_api.dto.PagedResponse;
 import com.challenge.listings_api.entity.Listing;
+import com.challenge.listings_api.event.ListingIndexEvent;
 import com.challenge.listings_api.exception.ResourceNotFoundException;
 import com.challenge.listings_api.repository.ListingRepository;
 import com.challenge.listings_api.repository.ListingSpecifications;
 import com.challenge.listings_api.repository.ListingSummaryProjection;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.cache.annotation.Cacheable;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -22,12 +25,23 @@ import java.util.stream.Collectors;
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
+@Slf4j
 
 public class ListingService {
 
 
-
     private final ListingRepository repository;
+
+    private final ApplicationEventPublisher eventPublisher;
+
+    @Transactional
+    public Listing createListing(Listing listing) {
+        Listing saved = repository.save(listing);
+        log.info("Saving new listing:{}", saved.getId());
+        eventPublisher.publishEvent(new ListingIndexEvent(this, saved));
+        log.info("Sending data to elasticsearch:{}", listing.getId());
+        return saved;
+    }
 
     public PagedResponse<ListingSummaryProjection> searchListings(
             String cursor,
@@ -73,6 +87,7 @@ public class ListingService {
     public ListingDetailsDTO getById(String id) {
         Listing listing = repository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Listing with ID " + id + " not found"));
+        log.info("Getting data from sql:{}", listing.getId());
         return mapToDetails(listing);
     }
 
@@ -104,8 +119,8 @@ public class ListingService {
     }
 
     public void validateRanges(Double minPrice, Double maxPrice,
-                                Integer minRooms, Integer maxRooms,
-                                Double minArea, Double maxArea) {
+                               Integer minRooms, Integer maxRooms,
+                               Double minArea, Double maxArea) {
         if (minPrice != null && maxPrice != null && minPrice > maxPrice)
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "min_price cannot be greater than max_price");
         if (minRooms != null && maxRooms != null && minRooms > maxRooms)

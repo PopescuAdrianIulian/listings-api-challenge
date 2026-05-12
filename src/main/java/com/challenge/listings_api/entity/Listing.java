@@ -12,8 +12,8 @@ import lombok.Setter;
 public class Listing {
 
     @Id
-    @Column(length = 64, nullable = false)
-    @NotBlank(message = "ID-ul nu poate fi gol")
+    @GeneratedValue(strategy = GenerationType.UUID)
+    @Column(length = 36, nullable = false, updatable = false)
     private String id;
 
     @NotBlank(message = "Titlul este obligatoriu")

@@ -3,8 +3,10 @@ package com.challenge.listings_api.controller;
 import com.challenge.listings_api.dto.ClusterDTO;
 import com.challenge.listings_api.dto.ListingDetailsDTO;
 import com.challenge.listings_api.dto.PagedResponse;
+import com.challenge.listings_api.entity.Listing;
 import com.challenge.listings_api.repository.ListingSummaryProjection;
 import com.challenge.listings_api.service.ListingService;
+import jakarta.validation.Valid;
 import jakarta.validation.constraints.*;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -21,7 +23,18 @@ import java.util.Map;
 @Validated
 public class ListingController {
 
+    /**
+     * Controller class for sql
+     */
+
     private final ListingService service;
+
+
+    @PostMapping("/listings")
+    public ResponseEntity<Listing> createListing(@Valid @RequestBody Listing listing) {
+        Listing created = service.createListing(listing);
+        return ResponseEntity.status(HttpStatus.CREATED).body(created);
+    }
 
     /**
      * Endpoint pentru monitorizare. Returnează 200 OK și un status JSON.
